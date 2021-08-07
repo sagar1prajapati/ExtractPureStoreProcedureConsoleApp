@@ -1,0 +1,104 @@
+﻿USE [ELPROCMS]
+GO
+/****** Object:  StoredProcedure [dbo].[SP_SUBMIT_ORDER]    Script Date: 07-08-2021 19:50:51 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- =============================================
+-- Author:		<Author,,Name>
+-- Create date: <Create Date,,>
+-- Description:	<Description,,>
+-- =============================================
+--Drop Procedure SP_SUBMIT_ORDER
+
+ALTER PROCEDURE [dbo].[SP_SUBMIT_ORDER]
+	-- Add the parameters for the stored procedure here
+--@Name varchar(200),
+@ID bigint = null,
+@AllProductsSubtotal decimal(18,5) = null,
+@DeliveryCharges decimal(18,5) = null,
+@PackingCharges decimal(18,5) = null,
+@DeliveryType varchar(50) = null,
+@NumberOfItems bigInt = null,
+@DeliveryPinCode varchar(50) = null,
+@Name varchar(500) = null, 
+@AddressLine1 varchar(5000)= null,
+@AddressLine2 varchar(5000)= null,
+@NearestLandMark varchar(5000)= null,
+@Area varchar(5000)= null,
+@City varchar(5000)= null,
+@State varchar(5000)= null,
+@WithinPunePinCode varchar(50) = null,
+@OutSidePunePinCode varchar(50) = null,
+@MobileNumber varchar(50) = null,
+@EmailID varchar(50) = null,
+@FinalTotal  decimal(18,5) = null,
+@t1 as OrderItem readonly
+
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+DECLARE @ProductID bigint; 
+DECLARE @ProductName varchar(200);
+DECLARE @ProductQty decimal(18,2); 
+DECLARE @ProductPrice decimal(18,2); 
+DECLARE @ProductTotal decimal(18,2)
+
+
+Declare @ClassID bigint = null;
+Declare @AdmissionNo varchar(1000) = null;
+--Declare @EmailID varchar(500) = null;
+--Declare @MobNo  varchar(100) = null;
+Declare @OrderStatusID varchar(100) = null;
+Declare @OrderID bigint = null;
+Declare @PinCode varchar(500) = null;
+--Select @ClassID= ClassID,@AdmissionNo = AdmissionNo ,@EmailID =EmailID,@MobNo = MobNo from StudentMaster where ID = @ID
+Select @ClassID= ClassID,@AdmissionNo = AdmissionNo  from StudentMaster where ID = @ID
+
+
+Select @OrderStatusID = ID  from OrderStatusMaster where Code  = 'ORDER INITIATE'
+
+if( @DeliveryPinCode = 'withinPune')
+	begin
+		set @PinCode = @WithinPunePinCode ;
+	end
+else
+	begin
+	  set	@PinCode = @OutSidePunePinCode ;
+	end
+
+	--__________________SAVE ORDER HEADER___________________
+	INSERT INTO [dbo].[Order] 
+	([StudentID] ,[ClassID] ,[AdmissionNo] ,[Number] ,[CourierID] ,[SGST] ,[CGST] ,[GST] ,[GSTAmount] ,[Amount] ,[DeliveryCharges] , [PackingCharges] ,[TotalAmount] ,[TotalDiscount] ,[OrderDate] ,[ExpectedDeliveryDate] ,[DeliveryTypeCode] ,[NumberOfItems] ,[StatusID] ,[MobNo] ,[EmailID] ,[PinCode] ,[Address] ,[DeliveryType] ,[DeliveryPinCode] ,[Name] ,[AddressLine1] ,[AddressLine2] ,[NearestLandMark] ,[Area] ,[City] ,[State] ,[WithinPunePinCode] ,[OutSidePunePinCode] ,[Comments] ,[IsActive] ,[CreatedBy] ,[CreatedDate] )
+		VALUES
+	(@ID ,@ClassID,@AdmissionNo ,NULL,NULL,NULL ,NULL,NULL,NULL ,@AllProductsSubtotal ,@DeliveryCharges , @PackingCharges ,@FinalTotal ,NULL ,GetDate() ,NULL ,@DeliveryType ,@NumberOfItems ,@OrderStatusID ,@MobileNumber,@EmailID ,@PinCode ,NULL ,@DeliveryType ,@DeliveryPinCode ,@Name ,@AddressLine1,@AddressLine2 ,@NearestLandMark,@Area,@City ,@State ,@WithinPunePinCode ,@OutSidePunePinCode,NULL ,1 ,@ID,GetDate())
+	--(@ID ,@ClassID,@AdmissionNo ,NULL,NULL,NULL ,NULL,NULL,NULL ,@AllProductsSubtotal ,@DeliveryCharges , @PackingCharges ,@FinalTotal ,NULL ,GetDate() ,NULL ,@DeliveryType ,@NumberOfItems ,@OrderStatusID ,@MobNo,@EmailID ,@PinCode ,NULL ,@DeliveryType ,@DeliveryPinCode ,@Name ,@AddressLine1,@AddressLine2 ,@NearestLandMark,@Area,@City ,@State ,@WithinPunePinCode ,@OutSidePunePinCode,NULL ,1 ,@ID,GetDate())
+
+	select @OrderID=SCOPE_IDENTITY();
+	update [dbo].[Order]  set [Number]  = 'ORD' + ( SELECT CAST(@OrderID AS varchar)) where ID =@OrderID; 
+
+		--__________________SAVE ORDER DETAIL___________________
+
+    declare detail cursor for select ProductID ,ProductName,ProductQty,ProductPrice,ProductTotal from @t1 
+	open detail
+	fetch next from detail into @ProductID,@ProductName,@ProductQty,@ProductPrice,@ProductTotal
+	while @@FETCH_STATUS=0
+		 begin	
+
+			INSERT INTO [dbo].[OrderItems]
+			([OrderID] ,[ProductID] ,[OrderNumber] ,[SGST] ,[CGST] ,[GST] ,[GSTAmount] ,[Qty] ,[Rate] ,[TotalAmount] ,[Discount] ,[Comments] ,[IsActive] ,[CreatedBy] ,[CreatedDate] ,[ModifiedBy] ,[ModifiedDate])
+			VALUES
+			(@OrderID ,@ProductID , 'ORD123' ,0 ,0 ,0 ,0,@ProductQty ,@ProductPrice ,@ProductTotal,0,NULL ,1 ,0 ,GetDate() ,0 ,GetDate())
+
+	fetch next from detail into @ProductID,@ProductName,@ProductQty,@ProductPrice,@ProductTotal
+	end
+	close detail
+	deallocate detail
+
+	select @OrderID
+		
+END
